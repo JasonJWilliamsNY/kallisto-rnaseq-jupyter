@@ -1,0 +1,190 @@
+---
+title: "Sleuth RNA-Seq Tutorial"
+output: html_notebook
+---
+
+This tutorial will take you through a sample RNA-Seq analysis using performed by [kallisto](https://pachterlab.github.io/kallisto/about), using an RNA-Seq R package [Sleuth](https://pachterlab.github.io/sleuth/about). This tutorial is based on the one by the [Pachter lab](https://pachterlab.github.io/sleuth_walkthroughs/boj/analysis.html). 
+
+## Install Kallisto 
+
+Installation instructions for Kallisto are [available here](https://pachterlab.github.io/sleuth/download). This make take a few minutes!
+
+```{r message=FALSE, include=FALSE}
+source("http://bioconductor.org/biocLite.R")
+biocLite("rhdf5")
+install.packages("devtools")
+devtools::install_github("pachterlab/sleuth")
+```
+
+
+Next, we need to load the Sleuth library to begin. We will also check the version:
+```{r message=FALSE}
+library("sleuth")
+packageVersion("sleuth")
+```
+
+## Locate sample names and describe our experimental design
+
+We need to provide Sleuth with our sample names, which in our case are based on our SRA Run information:
+
+```{r}
+sample_id <- dir(file.path("~/analysis/"))
+sample_id
+```
+
+We also need to get the file paths to our results files. 
+```{r}
+kal_dirs <- file.path("~/analysis", sample_id)
+```
+
+We also need to create a table that provides more meaningful names for describing our experiment. Let's use the sample ids as the first column in our table. We provide here our own choice of names for the samples as provided from the [SRA dataset](https://www.ncbi.nlm.nih.gov/sra?term=SRP003234)
+
+```{r}
+experiment_info <- data.frame(sample=sample_id, 
+                              condition_timepoint = c(
+                                "ap1_3d_1", 
+                                "ap1_3d_2", 
+                                "ap1_5d_1",
+                                "ap1_5d_1", 
+                                "ap1_5d_2", 
+                                "ap3_3d_1",
+                                "ap3_3d_2",
+                                "ap3_5d_1",
+                                "ap3_5d_1",
+                                "ap3_5d_1",
+                                "ap3_5d_2",
+                                "ag_5d_1",
+                                "ag_5d_2",
+                                "ag_3d_1",
+                                "ag_3d_2",
+                                "total_3d_1",
+                                "total_3d_2",
+                                "trap_3d_1", 
+                                "trap_3d_2"
+                              ))
+```
+
+
+
+We will add our filepaths to the table
+
+```{r}
+s2c <- dplyr::mutate(experiment_info, path = kal_dirs)
+```
+
+We will also install a plotting library 
+```{r}
+
+require("cowplot")
+library(cowplot)
+```
+
+## Get gene names from biomaRt 
+
+Before we look at our data, lets use [biomaRt](https://bioconductor.org/packages/release/bioc/html/biomaRt.html) tools will allow us to pull in recognizable gene names from a database. 
+
+First let's install and load BiomRart 
+
+```{r}
+source("https://bioconductor.org/biocLite.R")
+biocLite("biomaRt")
+```
+
+Next we need to determine which biomaRt to use. This can be a little complex so 
+be sure to read their [documentation](https://www.bioconductor.org/packages/devel/bioc/vignettes/biomaRt/inst/doc/biomaRt.html) and this [blog post](https://nsaunders.wordpress.com/2015/04/28/some-basics-of-biomart/) is also helpful. 
+
+```{r}
+marts <- listMarts()
+marts
+```
+
+If you are not working with these Ensembl data bases you may want to check out documentation on [using BiomaRts other than Ensembl](https://bioconductor.org/packages/release/bioc/vignettes/biomaRt/inst/doc/biomaRt.html#using-a-biomart-other-than-ensembl). We are using plants, so
+
+```{r}
+marts <- listMarts(host = "plants.ensembl.org")
+marts
+```
+
+For now, remember that we will want to use `plants_mart`. 
+
+Next, we need to choose a specific dataset. 
+
+```{r}
+plants_mart <- useMart("plants_mart", host = "plants.ensembl.org" )
+listDatasets(plants_mart)
+```
+
+After a little looking, its the `athaliana_eg_gene` dataset that we need. Finally, we need to update our `plants_mart` to be more specific. 
+
+```{r}
+plants_mart <- useMart("plants_mart", dataset = "athaliana_eg_gene", host="plants.ensembl.org" )
+```
+
+Now we want to get specific attributes from the list of genes we can import from biomart
+
+```{r}
+listAttributes(plants_mart)
+```
+
+We can choose whichever of these we'd like to use. Let's get transcript ids, gene ids, a description, and gene names. Notice, there are many things you may 
+want to come back for. We must get the transcript id because these are the names of the transcripts that were used in our Kallisto quantification. 
+
+```{r}
+t2g <- getBM(attributes = c("ensembl_transcript_id", 
+                            "ensembl_gene_id", 
+                            "description",
+                            "external_gene_name"), 
+             mart = plants_mart)
+```
+
+We need to make sure the `ensembl_transcript_id` column is named `target_id`
+
+```{r}
+ttg <- dplyr::rename(t2g, target_id= ensembl_transcript_id)
+```
+
+
+### Prepare data for Sleuth 
+
+Now we need to tell Sleuth both about the Kallisto results and the gene names (and gene descriptions/metadata) we obtained from biomaRt. The `sleuth_prep` function does this. 
+
+```{r}
+so <- sleuth_prep(s2c, #This is our data frame of sample names and file paths
+                  target_mapping = ttg, #This is our bioMart data
+                  aggregation_column = "target_id" # This is the column that should match the column in our Kallisto tsv result files
+                  )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+
+source("https://bioconductor.org/biocLite.R")
+biocLite("biomaRt")
+library("biomaRt")
+listMarts(host="plants.ensembl.org") 
+
+mart <- biomaRt::useMart(biomart = "plants_mart", dataset = "athaliana_eg_gene", host="plants.ensembl.org")
+
+t2g <- biomaRt::getBM(attributes = c("ensembl_transcript_id", "ensembl_gene_id", "external_gene_name"), mart = mart)
+
+t2g <- dplyr::rename(t2g, target_id = ensembl_transcript_id, ens_gene = ensembl_gene_id, ext_gene = external_gene_name)
+```
+
+
+
+
+
+
+
+
