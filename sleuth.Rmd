@@ -140,7 +140,7 @@ t2g <- getBM(attributes = c("ensembl_transcript_id",
 We need to make sure the `ensembl_transcript_id` column is named `target_id`
 
 ```{r}
-ttg <- dplyr::rename(t2g, target_id= ensembl_transcript_id)
+ttg <- dplyr::rename(t2g, target_id= ensembl_transcript_id, ens_gene = ensembl_gene_id, ext_gene = external_gene_name)
 ```
 
 
@@ -149,37 +149,58 @@ ttg <- dplyr::rename(t2g, target_id= ensembl_transcript_id)
 Now we need to tell Sleuth both about the Kallisto results and the gene names (and gene descriptions/metadata) we obtained from biomaRt. The `sleuth_prep` function does this. 
 
 ```{r}
-so <- sleuth_prep(s2c, #This is our data frame of sample names and file paths
-                  target_mapping = ttg, #This is our bioMart data
-                  aggregation_column = "target_id" # This is the column that should match the column in our Kallisto tsv result files
-                  )
+so <- sleuth_prep(s2c, target_mapping = ttg)
 ```
 
 
+### Examine Sleuth PCA
 
-
-
-
-
-
-
-
-
-
+Next, we should check to see if our samples (and replicates) cluster on a PCA (as should expect) or if there are outliers:
 
 ```{r}
-
-source("https://bioconductor.org/biocLite.R")
-biocLite("biomaRt")
-library("biomaRt")
-listMarts(host="plants.ensembl.org") 
-
-mart <- biomaRt::useMart(biomart = "plants_mart", dataset = "athaliana_eg_gene", host="plants.ensembl.org")
-
-t2g <- biomaRt::getBM(attributes = c("ensembl_transcript_id", "ensembl_gene_id", "external_gene_name"), mart = mart)
-
-t2g <- dplyr::rename(t2g, target_id = ensembl_transcript_id, ens_gene = ensembl_gene_id, ext_gene = external_gene_name)
+plot_pca(so, color_by = 'condition_timepoint', text_labels = TRUE)
 ```
+
+We can also see genes involved in the the 1st PC by looking at the loadings (primary genes whose linear combinations define the principal components)
+
+```{r}
+plot_loadings(so, pc_input = 1)
+```
+
+## Differential expression testing with Sleuth 
+
+Now we need to run a few functions that will test for differential expression (abundance). 
+
+First we will create a model
+
+```{r}
+so <- sleuth_fit(so, ~condition_timepoint, 'full')
+so <- sleuth_fit(so, ~1, 'reduced')
+so <- sleuth_lrt(so, 'reduced', 'full')
+```
+
+Now we can get the results of this analysis
+
+```{r}
+full_results <- sleuth_results(so, 'reduced:full', 'lrt',
+                               show_all = FALSE)
+head(full_results)
+```
+
+
+
+Let's add  Wald test
+```{r}
+wald_test <- colnames(design_matrix(so))[2]
+so <- sleuth_wt(so, wald_test)
+```
+
+And start a Shiny Browser
+
+```{r}
+sleuth_live(so)
+```
+
 
 
 
