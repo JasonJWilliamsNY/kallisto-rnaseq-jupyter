@@ -9,7 +9,8 @@ This tutorial will take you through a sample RNA-Seq analysis using performed by
 
 Installation instructions for Kallisto are [available here](https://pachterlab.github.io/sleuth/download). This make take a few minute so we have done this for you. The commented code is FYI. 
 
-```{r message=FALSE, include=FALSE}
+```{r message=FALSE}
+
 source("http://bioconductor.org/biocLite.R")
 #biocLite("rhdf5")
 #install.packages("devtools")
@@ -41,26 +42,26 @@ We also need to create a table that provides more meaningful names for describin
 
 ```{r}
 experiment_info <- data.frame(sample=sample_id, 
-                              condition_timepoint = c(
-                                "ap1_3d_1", 
-                                "ap1_3d_2", 
-                                "ap1_5d_1",
-                                "ap1_5d_1", 
-                                "ap1_5d_2", 
-                                "ap3_3d_1",
-                                "ap3_3d_2",
-                                "ap3_5d_1",
-                                "ap3_5d_1",
-                                "ap3_5d_1",
+                              condition = c(
+                                "ap1_3days", 
+                                "ap1_3days", 
+                                "ap1_5days",
+                                "ap1_5days", 
+                                "ap1_5days", 
+                                "ap3_3days",
+                                "ap3_3days",
+                                "ap3_5days",
+                                "ap3_5days",
+                                "ap3_5days",
                                 "ap3_5d_2",
-                                "ag_5d_1",
-                                "ag_5d_2",
-                                "ag_3d_1",
-                                "ag_3d_2",
-                                "total_3d_1",
-                                "total_3d_2",
-                                "trap_3d_1", 
-                                "trap_3d_2"
+                                "ag_5days",
+                                "ag_5days",
+                                "ag_3days",
+                                "ag_3days",
+                                "total_transctriptome",
+                                "total_transctriptome",
+                                "translatome_3day", 
+                                "translatome_3day"
                               ))
 ```
 
@@ -72,13 +73,32 @@ We will add our filepaths to the table
 s2c <- dplyr::mutate(experiment_info, path = kal_dirs)
 ```
 
+Let's view the table we have created:
+```{r}
+s2c
+```
+
+Let's just compare the AP3 domain translatome against whole translatome. To do this we will select the appropriate subset of our table: 
+
+```{r}
+desired_conditions <- c("ap3_5days", 
+                        "ap3_5days", 
+                        "ap3_5days", 
+                        "total_transctriptome",
+                        "total_transctriptome")
+s2c <- dplyr::filter(s2c, condition %in% desired_conditions)
+s2c
+```
+
+
+
 We will also install a plotting library and some other functions we will need...
+
 ```{r}
 install.packages("gridExtra")
 install.packages("cowplot")
 library(cowplot)
 library(gridExtra)
-```
 ```
 
 ## Get gene names from biomaRt 
@@ -149,10 +169,21 @@ ttg <- dplyr::rename(t2g, target_id= ensembl_transcript_id, ens_gene = ensembl_g
 
 ### Prepare data for Sleuth 
 
+first we need to alter our experimental design so that we consider the full transcriptome sample to be the "control" to compare to...
+
+```{r}
+s2c$condition <- relevel(s2c$condition, ref = "total_transctriptome")
+```
+
+
 Now we need to tell Sleuth both about the Kallisto results and the gene names (and gene descriptions/metadata) we obtained from biomaRt. The `sleuth_prep` function does this. 
 
 ```{r}
-so <- sleuth_prep(s2c, target_mapping = ttg)
+so <- sleuth_prep(s2c, 
+                  full_model = ~condition,  
+                  target_mapping = ttg, 
+                  read_bootstrap_tpm=TRUE, 
+                  extra_bootstrap_summary = TRUE)
 ```
 
 
@@ -161,8 +192,27 @@ so <- sleuth_prep(s2c, target_mapping = ttg)
 Next, we should check to see if our samples (and replicates) cluster on a PCA (as should expect) or if there are outliers:
 
 ```{r}
-plot_pca(so, color_by = 'condition_timepoint', text_labels = TRUE)
+plot_pca(so, color_by = 'condition', text_labels = TRUE)
 ```
+
+The SRR064158 looks like an outlier so let's remove that from our analysis. As an exercise come back to see what this analysis looks like without doing this. 
+
+```{r}
+
+s2c <- dplyr::filter(s2c, sample != 'SRR064158_quant')
+so <- sleuth_prep(s2c, 
+                  full_model = ~condition,  
+                  target_mapping = ttg, 
+                  read_bootstrap_tpm=TRUE, 
+                  extra_bootstrap_summary = TRUE)
+```
+
+let's rerun the PCA
+
+```{r}
+plot_pca(so, color_by = 'condition', text_labels = TRUE)
+```
+
 
 We can also see genes involved in the the 1st PC by looking at the loadings (primary genes whose linear combinations define the principal components)
 
@@ -177,7 +227,7 @@ Now we need to run a few functions that will test for differential expression (a
 First we will create a model
 
 ```{r}
-so <- sleuth_fit(so, ~condition_timepoint, 'full')
+so <- sleuth_fit(so, ~condition, 'full')
 so <- sleuth_fit(so, ~1, 'reduced')
 so <- sleuth_lrt(so, 'reduced', 'full')
 ```
