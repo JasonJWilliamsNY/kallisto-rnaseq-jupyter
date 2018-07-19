@@ -43,25 +43,25 @@ We also need to create a table that provides more meaningful names for describin
 ```{r}
 experiment_info <- data.frame(sample=sample_id, 
                               condition = c(
-                                "ap1_3days", 
-                                "ap1_3days", 
-                                "ap1_5days",
-                                "ap1_5days", 
-                                "ap1_5days", 
-                                "ap3_3days",
-                                "ap3_3days",
-                                "ap3_5days",
-                                "ap3_5days",
-                                "ap3_5days",
-                                "ap3_5d_2",
-                                "ag_5days",
-                                "ag_5days",
-                                "ag_3days",
-                                "ag_3days",
+                                "ap1_stage4", 
+                                "ap1_stage4", 
+                                "ap1_stage6-7",
+                                "ap1_stage6-7", 
+                                "ap1_stage6-7", 
+                                "ap3_stage4",
+                                "ap3_stage4",
+                                "ap3_stage6",
+                                "ap3_stage6",
+                                "ap3_stage6",
+                                "ap3_stage6",
+                                "ag_stage6",
+                                "ag_stage6",
+                                "ag_stage4",
+                                "ag_stage4",
                                 "total_transctriptome",
                                 "total_transctriptome",
-                                "translatome_3day", 
-                                "translatome_3day"
+                                "translatome", 
+                                "translatome"
                               ))
 ```
 
@@ -81,10 +81,7 @@ s2c
 Let's just compare the AP3 domain translatome against whole translatome. To do this we will select the appropriate subset of our table: 
 
 ```{r}
-desired_conditions <- c("ap3_5days", 
-                        "ap3_5days", 
-                        "ap3_5days", 
-                        "total_transctriptome",
+desired_conditions <- c("ap3_stage6",
                         "total_transctriptome")
 s2c <- dplyr::filter(s2c, condition %in% desired_conditions)
 s2c
